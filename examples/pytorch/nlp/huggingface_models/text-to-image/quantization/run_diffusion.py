@@ -141,6 +141,16 @@ def parse_args():
         action="store_true",
         help="benchmark for int8 model",
     )
+    parser.add_argument(
+        "--bf16",
+        action="store_true",
+        help="benchmark for bf16 model",
+    )
+    parser.add_argument(
+        "--ipex",
+        action="store_true",
+        help="benchmark with IPEX",
+    )
 
     args = parser.parse_args()
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
@@ -180,13 +190,24 @@ def benchmark(pipe, generator):
 
 def accuracy(pipe, generator, rows, args):
     with torch.no_grad():
-        new_images = pipe(
-            args.input_text,
-            guidance_scale=7.5,
-            num_inference_steps=50,
-            generator=generator,
-            num_images_per_prompt=args.num_images_per_prompt,
-        ).images
+        if args.bf16:
+            print("---- enable AMP bf16 model ----")
+            with torch.cpu.amp.autocast(enabled=True, dtype=torch.bfloat16):
+                new_images = pipe(
+                    args.input_text,
+                    guidance_scale=7.5,
+                    num_inference_steps=50,
+                    generator=generator,
+                    num_images_per_prompt=args.num_images_per_prompt,
+                ).images
+        else:
+            new_images = pipe(
+                args.input_text,
+                guidance_scale=7.5,
+                num_inference_steps=50,
+                generator=generator,
+                num_images_per_prompt=args.num_images_per_prompt,
+            ).images
         tmp_save_images = "tmp_save_images"
         os.makedirs(tmp_save_images, exist_ok=True)
         if os.path.isfile(os.path.join(tmp_save_images, "image.png")):
@@ -229,6 +250,9 @@ def main():
     # download model & vocab.
     pipe = StableDiffusionPipeline.from_pretrained(args.model_name_or_path)
     _rows = int(math.sqrt(args.num_images_per_prompt))
+
+    if args.ipex:
+        import intel_extension_for_pytorch as ipex
 
     if args.tune:
         tmp_fp32_images = "tmp_fp32_images"
@@ -303,28 +327,41 @@ def main():
 
     if args.benchmark or args.accuracy_only:
 
-        def b_func(model):
-            setattr(pipe, "unet", model)
+        def b_func(pipe):
             benchmark(pipe, generator)
 
         if args.int8:
             print("====int8 inference====")
             from neural_compressor.utils.pytorch import load
             checkpoint = os.path.join(args.output_dir)
-            model = load(checkpoint, model=getattr(pipe, "unet"))
-            model.eval()
+            pipe.unet = load(checkpoint, model=getattr(pipe, "unet"))
+            pipe.unet.eval()
+        elif args.bf16:
+            if args.ipex:
+                print("====ipex bf16 inference====")
+                sample = torch.randn(2, 4, 64, 64)
+                timestep = torch.rand(1)*999
+                encoder_hidden_status = torch.randn(2, 77, 768)
+                input_example = (sample, timestep, encoder_hidden_status)
+                pipe.unet = ipex.optimize(pipe.unet.eval(), dtype=torch.bfloat16, inplace=True, sample_input=input_example)
+                pipe.vae = ipex.optimize(pipe.vae.eval(), dtype=torch.bfloat16, inplace=True)
+                pipe.safety_checker = ipex.optimize(pipe.safety_checker.eval(), dtype=torch.bfloat16, inplace=True)
+            else:
+                print("====bf16 inference====")
+                pipe.text_encoder = pipe.text_encoder.to(torch.bfloat16)
+                pipe.unet = pipe.unet.to(torch.bfloat16)
+                pipe.vae = pipe.vae.to(torch.bfloat16)
         else:
             print("====fp32 inference====")
-            model = getattr(pipe, "unet")
+
         generator = torch.Generator("cpu").manual_seed(args.seed)
         if args.benchmark:
             from neural_compressor.benchmark import fit
             from neural_compressor.config import BenchmarkConfig
 
             b_conf = BenchmarkConfig(cores_per_instance=4, num_of_instance=1)
-            fit(model, config=b_conf, b_func=b_func)
+            fit(pipe, config=b_conf, b_func=b_func)
         if args.accuracy_only:
-            setattr(pipe, "unet", model)
             accuracy(pipe, generator, _rows, args)
 
 
