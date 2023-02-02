@@ -49,4 +49,4 @@ MODEL_NAME = Optimize(MODEL_NAME)
 
 ### Use Launcher
 
-Then, simply use the launcher file to execute Neural Coder. For example, if the launcher file ```launcher.py``` is positioned under your root path of the Python package `my_package`, then your Neural Coder launcher header is ```python -m my_package.launcher```. If your Deep Learning code is `main.py`, then the final usage will be ```python -m my_package.launcher main.py xxx (arguments)```. For detailed launcher usage, please refer to this [doc](./PythonLauncher.MD).
+Then, simply use the launcher file to execute Neural Coder. For example, if the launcher file ```launcher.py``` is positioned under your root path of the Python package `my_package`, then your Neural Coder launcher header is ```python -m my_package.launcher```. If your Deep Learning code is `main.py`, then the final usage will be ```python -m my_package.launcher main.py xxx (arguments)```. For detailed launcher usage, please refer to this [doc](./PythonLauncher.md).
