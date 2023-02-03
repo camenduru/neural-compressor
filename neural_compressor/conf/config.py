@@ -278,7 +278,7 @@ ops_schema = Schema({
         # placeholder are only for PyTorch framework
         Optional('algorithm'): And(
             list,
-            lambda s: all(i in ['minmax', 'kl', 'placeholder'] for i in s))
+            lambda s: all(i in ['minmax', 'kl', 'placeholder', 'percentile', 'entropy'] for i in s))
     }
 })
 

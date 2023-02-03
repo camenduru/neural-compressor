@@ -40,7 +40,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'Conv': {
@@ -54,7 +54,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'Gather': {
@@ -67,7 +67,7 @@
             'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor'],
                         }
                     },
@@ -82,7 +82,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'default': {
@@ -95,7 +95,7 @@
              'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor']
                         }
                     },
@@ -152,7 +152,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'Conv': {
@@ -166,7 +166,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'Gather': {
@@ -179,7 +179,7 @@
             'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor'],
                         }
                     },
@@ -194,7 +194,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'default': {
@@ -207,7 +207,7 @@
              'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor']
                         }
                     },
@@ -241,7 +241,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'Conv': {
@@ -255,7 +255,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'Gather': {
@@ -268,7 +268,7 @@
             'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor'],
                         }
                     },
@@ -283,7 +283,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'EmbedLayerNormalization': {
@@ -296,7 +296,7 @@
              'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor']
                         }
                     },
@@ -310,7 +310,7 @@
              'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor']
                         }
                     },
@@ -350,7 +350,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'Conv': {
@@ -364,7 +364,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'Gather': {
@@ -377,7 +377,7 @@
             'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor'],
                         }
                     },
@@ -392,7 +392,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'Gemm': {
@@ -406,7 +406,7 @@
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
                         'granularity': ['per_tensor'],
-                        'algorithm': ['minmax']
+                        'algorithm': ['minmax', 'percentile', 'entropy']
                         }
                     },
           'EmbedLayerNormalization': {
@@ -419,7 +419,7 @@
              'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor']
                         }
                     },
@@ -433,7 +433,7 @@
              'activation': {
                         'dtype': ['uint8'],
                         'scheme': ['asym'],
-                        'algorithm': ['minmax'],
+                        'algorithm': ['minmax', 'percentile', 'entropy'],
                         'granularity': ['per_tensor']
                         }
                     },

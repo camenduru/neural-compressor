@@ -36,6 +36,8 @@ from importlib.util import find_spec
 from neural_compressor.model.onnx_model import ONNXModel
 from neural_compressor.adaptor.ox_utils.util import make_dquant_node, is_B_transposed, \
     _get_qrange_for_qType, calculate_scale_zp
+from neural_compressor.adaptor.ox_utils.calibrater import CALIBRATION
+from neural_compressor.adaptor.ox_utils.util import find_by_name
 
 logger = logging.getLogger("neural_compressor")
 ONNX18_VERSION = Version("1.8.0")
@@ -136,7 +138,10 @@ class ONNXRTAugment:
                                    (node.name in self.white_nodes)
             if should_be_dump:
                 if not weight_only and not activation_only:
-                    tensors_to_dump.update(node.input)
+                    for inp in node.input:
+                        initializer = find_by_name(inp, model.graph.initializer)
+                        if initializer is None:
+                            tensors_to_dump.update(inp)
                     tensors_to_dump.update(node.output)
                 elif weight_only:
                     for input in node.input:
@@ -147,7 +152,7 @@ class ONNXRTAugment:
                             tensors_to_dump.add(input)
                 elif activation_only:
                     tensors_to_dump.update(node.output)
-
+        print('tensors_to_dump', tensors_to_dump)
         model_inputs = [i.name for i in model.graph.input]
         for tensor in tensors_to_dump:
             if tensor not in node_outputs and tensor not in initializers and \
@@ -204,7 +209,7 @@ class ONNXRTAugment:
                             location="weights.pb",
                             convert_attribute=False)
 
-    def get_intermediate_outputs(self, calib_mode=None):
+    def get_intermediate_outputs(self, q_config, calib_mode=None):
         """Gather intermediate model outputs after running inference."""
         # conduct inference session and get intermediate outputs
         so = onnxruntime.SessionOptions()
@@ -224,12 +229,10 @@ class ONNXRTAugment:
         intermediate_outputs = []
         len_inputs = len(session.get_inputs())
         inputs_names = [session.get_inputs()[i].name for i in range(len_inputs)]
-        output_dicts = {}
         
         node_output_names = [output.name if output.name not in self.dequantized_output \
                              else self.dequantized_output[output.name] \
                              for output in session.get_outputs()]
-
         for idx, (inputs, labels) in enumerate(self.dataloader):
             ort_inputs = {}
             if len_inputs == 1:
@@ -251,23 +254,49 @@ class ONNXRTAugment:
                 if idx > max(self.iterations):
                     break
                 if idx in self.iterations:
-                    for output_idx, output in enumerate(session.run(None, ort_inputs)): 
-                        if calib_mode == 'naive' and output.size != 0:
-                            output_dicts.setdefault(node_output_names[output_idx], \
-                                []).append([output.min(), output.max()])
-                        elif calib_mode == None:
-                            output_dicts.setdefault(node_output_names[output_idx], \
-                                []).append(output)
+                    intermediate_outputs.append(session.run(None, ort_inputs))
             else:
-                for output_idx, output in enumerate(session.run(None, ort_inputs)): 
-                    if calib_mode == 'naive' and output.size != 0:
-                        output_dicts.setdefault(node_output_names[output_idx], \
-                            []).append([output.min(), output.max()])
-                    elif calib_mode == None:
-                        output_dicts.setdefault(node_output_names[output_idx], \
-                            []).append(output)
+                intermediate_outputs.append(session.run(None, ort_inputs))
 
-        return list(output_dicts.keys()), output_dicts
+        # convert intermediate_outputs to below format:
+        # {'intermediate_output_name_1': [output_array_1, output_array_2, ...], 
+        #  'intermediate_output_name_2': [output_array_1, output_array_2, ...],
+        #  ...} 
+        merged_dict = {}
+        for intermediate_output in intermediate_outputs:
+            for (data, name) in zip(intermediate_output, node_output_names):
+                merged_dict.setdefault(name, []).append(data)
+
+        ranges_dict = {}
+        for data_name in merged_dict.keys():
+            input_name_to_nodes = self.model_wrapper.input_name_to_nodes
+            output_name_to_node = self.model_wrapper.output_name_to_node
+            node = None
+            if data_name in output_name_to_node:
+                node = output_name_to_node[data_name]
+            elif data_name in input_name_to_nodes:
+                node = input_name_to_nodes[data_name][0]
+            assert node, '{} is neither an input nor an output of nodes in augmented model.'.format(data_name)
+
+            # initialize a calibrater according to 'algorithm' in q_config
+            # and collect ranges of the intermediate output
+            calib_method = q_config[node.name]['activation']['algorithm']
+            assert calib_method in CALIBRATION, 'Calibration method {} is not registerd.'.format(calib_method)
+            calibrater = CALIBRATION[calib_method]()
+            calibrater.collect(merged_dict[data_name], [data_name])
+            ranges_dict.update(calibrater.outputs_dict)
+            
+            # print('calibrater.outputs_dict', data_name, calib_method, calibrater.outputs_dict)
+
+        # print('ranges_dict', ranges_dict)
+        # from neural_compressor.adaptor.ox_utils.calibrater import MinMaxCalibrater, PercentileCalibrater, EntropyCalibrater
+        # calibrater = MinMaxCalibrater()
+        # calibrater = PercentileCalibrater(symmetric=False)
+        # calibrater = EntropyCalibrater()
+        # calibrater.collect(intermediate_outputs, node_output_names)
+        # print('self.outputs_dict', calibrater.outputs_dict)
+
+        return list(ranges_dict.keys()), ranges_dict
 
     def _dequantize(self, tensor, scale_tensor, zo_tensor):
         """Helper function to dequantize tensor."""
@@ -373,10 +402,10 @@ class ONNXRTAugment:
 
         return final_dict
 
-    def dump_minmax(self, calib_mode='naive'):
+    def dump_minmax(self, q_config, calib_mode='naive'):
         """Get min/max values of tensors."""
         self.augment_graph()
-        node_output_names, output_dicts = self.get_intermediate_outputs(calib_mode)
+        node_output_names, output_dicts = self.get_intermediate_outputs(q_config, calib_mode)
         return self._map_calibration(node_output_names, output_dicts,
                                      calib_mode=calib_mode)
 
@@ -391,7 +420,7 @@ class ONNXRTAugment:
                                         a minimum of all values and the second element 
                                         is a maximum of all values. Defaults to 'naive'.
         """
-        return self.calculate_quantization_params(q_config, self.dump_minmax(calib_mode))
+        return self.calculate_quantization_params(q_config, self.dump_minmax(q_config, calib_mode))
 
     def calculate_quantization_params(self, q_config, quantization_thresholds):
         """Given quantization thresholds, calculate the quantization params.
