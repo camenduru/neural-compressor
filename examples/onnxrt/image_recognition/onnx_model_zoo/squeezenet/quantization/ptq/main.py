@@ -228,8 +228,37 @@ if __name__ == "__main__":
             print("Batch size = %d" % dataloader.batch_size)
             print("Accuracy: %.5f" % acc_result)
     if args.tune:
-        from neural_compressor import quantization, PostTrainingQuantConfig
-        config = PostTrainingQuantConfig(quant_format=args.quant_format)
+        from neural_compressor import quantization
+        from neural_compressor.config import PostTrainingQuantConfig, TuningCriterion
+        from neural_compressor.utils.constant import INT8_SYM_MINMAX_PERTENSOR
+        op_types = []
+        for node in model.graph.node:
+            op_types.append(node.op_type)
+        op_types = set(op_types)
+        # print({op_type:
+        #                                  {'weight': INT8_SYM_MINMAX_PERTENSOR, 
+        #                                   'activation': {'dtype': ['int8'],'scheme': ['sym'], 'algorithm': ['percentile'],'granularity': ['per_tensor']}
+        #                                  } for op_type in op_types})
+        tuning_criterion = TuningCriterion(max_trials=1)
+        # {op_type:
+        # {'weight': { 'dtype': ['int8'],'scheme': ['sym'],'algorithm': ['minmax'],'granularity': ['per_tensor']},
+        # 'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['minimax'],'granularity': ['per_tensor']}}
+        # for op_type in op_types}
+        op_type_list = {'FusedConv':{'weight': { 'dtype': ['int8'],'scheme': ['sym'],'algorithm': ['minmax'],'granularity': ['per_channel']},
+                                     'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['percentile'],'granularity': ['per_tensor']}},
+                        'MaxPool':{'weight': { 'dtype': ['int8'],'scheme': ['sym'],'algorithm': ['minmax'],'granularity': ['per_tensor']},
+                                   'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['percentile'],'granularity': ['per_tensor']}},
+                        'GlobalAveragePool':{'weight': { 'dtype': ['int8'],'scheme': ['sym'],'algorithm': ['minmax'],'granularity': ['per_tensor']},
+                                   'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['percentile'],'granularity': ['per_tensor']}},
+                        'Concat':{'weight': { 'dtype': ['int8'],'scheme': ['sym'],'algorithm': ['minmax'],'granularity': ['per_tensor']},
+                                   'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['percentile'],'granularity': ['per_tensor']}}
+                        }
+        config = PostTrainingQuantConfig(quant_format=args.quant_format,
+                                        #  calibration_sampling_size=[1],
+                                         tuning_criterion = tuning_criterion,
+                                         op_type_list = op_type_list,
+                                        )
+                                        #  {op_name:FP32_CONFIG for op_name in fp32_op_names if fp32_op_names}
  
         q_model = quantization.fit(model, config, calib_dataloader=dataloader,
 			     eval_func=eval)

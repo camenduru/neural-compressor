@@ -141,7 +141,9 @@ class ONNXRTAugment:
                     for inp in node.input:
                         initializer = find_by_name(inp, model.graph.initializer)
                         if initializer is None:
-                            tensors_to_dump.update(inp)
+                            tensors_to_dump.update([inp])
+                        if inp in [input.name for input in model.graph.input]:
+                            tensors_to_dump.update([inp])
                     tensors_to_dump.update(node.output)
                 elif weight_only:
                     for input in node.input:
@@ -280,7 +282,10 @@ class ONNXRTAugment:
 
             # initialize a calibrater according to 'algorithm' in q_config
             # and collect ranges of the intermediate output
-            calib_method = q_config[node.name]['activation']['algorithm']
+            if node.name in q_config:
+                calib_method = q_config[node.name]['activation']['algorithm']
+            else:
+                calib_method = 'minmax'
             assert calib_method in CALIBRATION, 'Calibration method {} is not registerd.'.format(calib_method)
             calibrater = CALIBRATION[calib_method]()
             calibrater.collect(merged_dict[data_name], [data_name])

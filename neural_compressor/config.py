@@ -59,7 +59,7 @@ ops_schema = Schema({
             lambda s: all(i in ['int8', 'uint8', 'fp32', 'bf16', 'None'] for i in s)),
         Optional('algorithm'): And(
             list,
-            lambda s: all(i in ['minmax', 'kl', 'placeholder'] for i in s))}})
+            lambda s: all(i in ['minmax', 'kl', 'placeholder', 'percentile', 'entropy'] for i in s))}})
 
 
 def check_value(name, src, supported_type, supported_value=[]):
