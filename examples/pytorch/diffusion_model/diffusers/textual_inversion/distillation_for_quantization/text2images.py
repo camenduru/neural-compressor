@@ -47,6 +47,19 @@ def parse_args():
         default=0,
         help="cuda_id.",
     )
+    parser.add_argument(
+        "--bf16",
+        dest='bf16',
+        action='store_true',
+        help="use ipex bf16.",
+    )
+    parser.add_argument(
+        "--int8",
+        dest='int8',
+        action='store_true',
+        help="use int8.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -101,12 +114,19 @@ pipeline = StableDiffusionPipeline(
     feature_extractor=CLIPFeatureExtractor.from_pretrained("openai/clip-vit-base-patch32"),
 )
 pipeline.safety_checker = lambda images, clip_input: (images, False)
-if os.path.exists(os.path.join(args.pretrained_model_name_or_path, "best_model.pt")):
+if args.int8:
+    assert os.path.exists(os.path.join(args.pretrained_model_name_or_path, "best_model.pt"))
     unet = load(args.pretrained_model_name_or_path, model=unet)
     unet.eval()
     setattr(pipeline, "unet", unet)
 else:
     unet = unet.to(torch.device("cuda", args.cuda_id))
+
+if args.bf16:
+    import intel_extension_for_pytorch as ipex
+    pipeline.vae = ipex.optimize(pipeline.vae.eval(), dtype=torch.bfloat16, inplace=True)
+    pipeline.safety_checker = ipex.optimize(pipeline.safety_checker.eval(), dtype=torch.bfloat16, inplace=True)
+
 pipeline = pipeline.to(unet.device)
 grid, images = generate_images(pipeline, prompt=args.caption, num_images_per_prompt=args.images_num, seed=args.seed)
 grid.save(
