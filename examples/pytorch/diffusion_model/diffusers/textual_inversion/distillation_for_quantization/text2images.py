@@ -59,6 +59,12 @@ def parse_args():
         action='store_true',
         help="use int8.",
     )
+    parser.add_argument(
+        "--jit",
+        dest='jit',
+        action='store_true',
+        help="use jit trace.",
+    )
 
     args = parser.parse_args()
     return args
@@ -118,6 +124,12 @@ if args.int8:
     assert os.path.exists(os.path.join(args.pretrained_model_name_or_path, "best_model.pt"))
     unet = load(args.pretrained_model_name_or_path, model=unet)
     unet.eval()
+    if args.jit:
+        sample = torch.randn(2, 4, 64, 64)
+        timestep = torch.rand(1)*999
+        encoder_hidden_status = torch.randn(2, 77, 768)
+        input_example = (sample, timestep, encoder_hidden_status)
+        unet = torch.jit.trace(unet, input_example, strict=False)
     setattr(pipeline, "unet", unet)
 else:
     unet = unet.to(torch.device("cuda", args.cuda_id))
