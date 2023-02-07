@@ -245,13 +245,13 @@ if __name__ == "__main__":
         # 'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['minimax'],'granularity': ['per_tensor']}}
         # for op_type in op_types}
         op_type_list = {'FusedConv':{'weight': { 'dtype': ['int8'],'scheme': ['sym'],'algorithm': ['minmax'],'granularity': ['per_channel']},
-                                     'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['percentile'],'granularity': ['per_tensor']}},
+                                     'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['entropy'],'granularity': ['per_tensor']}},
                         'MaxPool':{'weight': { 'dtype': ['int8'],'scheme': ['sym'],'algorithm': ['minmax'],'granularity': ['per_tensor']},
-                                   'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['percentile'],'granularity': ['per_tensor']}},
+                                   'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['entropy'],'granularity': ['per_tensor']}},
                         'GlobalAveragePool':{'weight': { 'dtype': ['int8'],'scheme': ['sym'],'algorithm': ['minmax'],'granularity': ['per_tensor']},
-                                   'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['percentile'],'granularity': ['per_tensor']}},
+                                   'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['entropy'],'granularity': ['per_tensor']}},
                         'Concat':{'weight': { 'dtype': ['int8'],'scheme': ['sym'],'algorithm': ['minmax'],'granularity': ['per_tensor']},
-                                   'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['percentile'],'granularity': ['per_tensor']}}
+                                   'activation': {'dtype': ['uint8'],'scheme': ['asym'],'algorithm': ['entropy'],'granularity': ['per_tensor']}}
                         }
         config = PostTrainingQuantConfig(quant_format=args.quant_format,
                                         #  calibration_sampling_size=[1],
