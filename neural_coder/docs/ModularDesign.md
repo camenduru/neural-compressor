@@ -10,6 +10,7 @@ Create a launcher file with file name such as ```launcher.py```, then put the fo
 ```
 from neural_coder.launcher import Launcher
 
+# specify your api design here
 STATIC_QUANT_API_DESIGN = XXX # a multi-line string, representing your API design for static quantization
 DYNAMIC_QUANT_API_DESIGN = XXX # a multi-line string, representing your API design for dynamic quantization
 
@@ -36,9 +37,7 @@ my_model = Optimize(my_model)
 ...
 ```
 
-where there are two added code lines.
-
-Then your multi-line string looks like
+where there are two added code lines, then your multi-line string looks like:
 
 ```
 s = f"""\
@@ -46,6 +45,8 @@ from OptimizeAPI import Optimize
 MODEL_NAME = Optimize(MODEL_NAME)
 """
 ```
+
+where `MODEL_NAME` is an alias for your model name per Neural Coder's code insertion regulation.
 
 ### Use Launcher
 
