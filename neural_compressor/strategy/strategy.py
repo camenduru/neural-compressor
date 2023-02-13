@@ -98,6 +98,15 @@ class TuneStrategy(object):
         self.cfg = conf.usr_cfg
         self.history_path = self._create_path(self.cfg.tuning.workspace.path, './history.snapshot')
         self.deploy_path = self._create_path(self.cfg.tuning.workspace.path, 'deploy.yaml')
+        
+        print(self.cfg)
+        # clear recipes
+        for recipe in self.cfg.quantization.recipes:
+            self.cfg.quantization.recipes[recipe] = True
+        
+        # clear op-wise tuning config
+        self.cfg.quantization.op_wise = self.cfg.quantization.optype_wise = None
+        
         logger.debug("Dump user yaml configuration:")
         logger.debug(self.cfg)
 
