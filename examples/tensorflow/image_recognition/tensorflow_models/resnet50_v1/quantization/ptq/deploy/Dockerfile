@@ -14,8 +14,10 @@
 # limitations under the License.
 
 ARG UBUNTU_VER=22.04
-ARG INC_VER=2.0
 FROM ubuntu:${UBUNTU_VER} as deploy
+
+ARG INC_VER=2.0
+ARG REPO=https://github.com/intel/neural-compressor.git
 
 # See http://bugs.python.org/issue19846
 ENV LANG C.UTF-8

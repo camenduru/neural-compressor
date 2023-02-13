@@ -28,8 +28,8 @@ CONTAINER_NAME=${CONTAINER_NAME:inc}
 
 # model params
 model_name="resnet50v1.0"
-dataset_location=path/to/ImageNet/
-model_src_dir="examples/tensorflow/image_recognition/tensorflow_models/resnet50_v1/quantization/ptq"
+dataset_location="/tf_dataset/dataset/imagenet"
+model_src_dir="/neural-compressor/examples/tensorflow/image_recognition/tensorflow_models/resnet50_v1/quantization/ptq"
 fp32_model_url="https://storage.googleapis.com/intel-optimized-tensorflow/models/v1_6/resnet50_fp32_pretrained_model.pb"
 batch_size="1"
 benchmark_list=("accuracy" "performance")
