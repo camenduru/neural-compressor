@@ -17,9 +17,8 @@
 # 1. docker image build
 # 2. docker container created
 # 3. get input model
-# 4. docker run with quantization
-# 5. docker run with benchmark
-# 6. collect benchmark results
+# 4. docker run with benchmark
+# 5. collect benchmark results
 
 # common params
 WORKSPACE=${WORKSPACE:-$(pwd)}
@@ -31,6 +30,7 @@ CONTAINER_NAME=${CONTAINER_NAME:-inc}
 dataset_location="/tf_dataset/dataset/imagenet"
 model_src_dir="/neural-compressor/examples/tensorflow/image_recognition/tensorflow_models/resnet50_v1/quantization/ptq"
 fp32_model_url="https://storage.googleapis.com/intel-optimized-tensorflow/models/v1_6/resnet50_fp32_pretrained_model.pb"
+int8_model_url="xxx"
 batch_size="100"
 benchmark_list=("accuracy" "performance")
 precision_list=("fp32" "int8")
@@ -51,22 +51,15 @@ docker run -tid --disable-content-trust --privileged --name="${CONTAINER_NAME}" 
 # 3. get input model
 docker exec "${CONTAINER_NAME}" bash -c "\
             cd /workspace && \
-            wget ${fp32_model_url} "
+            wget ${fp32_model_url} && \
+            wget ${int8_model_url} "
 
 fp32_model=$(echo ${fp32_model_url} | awk -F/ '{print $NF}')
 ls "${WORKSPACE}/${fp32_model}" || (echo 'Can not find fp32 model!' && exit 1)
-int8_model=quantized_int8.pb
-
-# 4. docker run with quantization
-docker exec "${CONTAINER_NAME}" bash -c "\
-            cd ${model_src_dir} &&\
-            pip install -r requirements.txt && \
-            bash run_tuning.sh --input_model=/workspace/${fp32_model} \
-                               --output_model=/workspace/${int8_model} \
-                               --dataset_location=/dataset_location 2>&1 | tee /workspace/quantization.log"
+int8_model=$(echo ${int8_model_url} | awk -F/ '{print $NF}')
 ls "${WORKSPACE}/${int8_model}" || (echo 'Can not find int8 model!' && exit 1)
 
-# 5. docker run with benchmark
+# 4. docker run with benchmark
 for mode in "${benchmark_list[@]}"; do
     for precision in "${precision_list[@]}"; do
         input_model=$(eval echo '$'{${precision}_model})
@@ -79,7 +72,7 @@ for mode in "${benchmark_list[@]}"; do
     done
 done
 
-# 6. collect benchmark results
+# 5. collect benchmark results
 for mode in "${benchmark_list[@]}"; do
     for precision in "${precision_list[@]}"; do
         if [ "$mode" == "accuracy" ]; then
