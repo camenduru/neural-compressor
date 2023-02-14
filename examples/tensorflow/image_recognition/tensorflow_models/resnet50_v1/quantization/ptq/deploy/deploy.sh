@@ -13,34 +13,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# 0. auto generate parameters
 # 1. docker image build
 # 2. docker container created
 # 3. get input model
 # 4. docker run with quantization
-# 5. docker run with benchmark and collect data
+# 5. docker run with benchmark
 # 6. collect benchmark results
 
 # common params
-WORKSPACE=${WORKSPACE:$(pwd)}
-INC_VER=${INC_VER:2.0}
+WORKSPACE=${WORKSPACE:-$(pwd)}
+INC_VER=${INC_VER:-2.0}
 IMAGE_NAME=inc:${INC_VER}
-CONTAINER_NAME=${CONTAINER_NAME:inc}
+CONTAINER_NAME=${CONTAINER_NAME:-inc}
 
 # model params
-model_name="resnet50v1.0"
 dataset_location="/tf_dataset/dataset/imagenet"
 model_src_dir="/neural-compressor/examples/tensorflow/image_recognition/tensorflow_models/resnet50_v1/quantization/ptq"
 fp32_model_url="https://storage.googleapis.com/intel-optimized-tensorflow/models/v1_6/resnet50_fp32_pretrained_model.pb"
-batch_size="1"
+batch_size="100"
 benchmark_list=("accuracy" "performance")
 precision_list=("fp32" "int8")
 
-
 # 1. docker image build
 docker build --build-arg UBUNTU_VER=22.04 \
-             --build-arg INC_VER=${INC_VER} \
+             --build-arg INC_VER="${INC_VER}" \
+             --build-arg https_proxy="${https_proxy}" \
+             --build-arg http_proxy="${http_proxy}" \
              -f Dockerfile \
-             -t ${IMAGE_NAME} .
+             -t "${IMAGE_NAME}" .
 
 # 2. docker container created
 docker run -tid --disable-content-trust --privileged --name="${CONTAINER_NAME}" --hostname="inc-container" \
@@ -48,32 +49,33 @@ docker run -tid --disable-content-trust --privileged --name="${CONTAINER_NAME}" 
            -v "${WORKSPACE}":/workspace -v "${dataset_location}":/dataset_location "${IMAGE_NAME}"
 
 # 3. get input model
-# the easiest way to get input model with wget directly, sometimes it could be a zip file.
 docker exec "${CONTAINER_NAME}" bash -c "\
-            cd /workspace \
+            cd /workspace && \
             wget ${fp32_model_url} "
 
 fp32_model=$(echo ${fp32_model_url} | awk -F/ '{print $NF}')
-int8_model=${model_name}_int8.pb # need to consider non pb format
+ls "${WORKSPACE}/${fp32_model}" || (echo 'Can not find fp32 model!' && exit 1)
+int8_model=quantized_int8.pb
 
 # 4. docker run with quantization
 docker exec "${CONTAINER_NAME}" bash -c "\
-            cd ${model_src_dir} \
-            pip install -r requirement.txt \
+            cd ${model_src_dir} &&\
+            pip install -r requirements.txt && \
             bash run_tuning.sh --input_model=/workspace/${fp32_model} \
                                --output_model=/workspace/${int8_model} \
-                               --dataset_location=/dataset_location > /workspace/quantization.log"
+                               --dataset_location=/dataset_location 2>&1 | tee /workspace/quantization.log"
+ls "${WORKSPACE}/${int8_model}" || (echo 'Can not find int8 model!' && exit 1)
 
 # 5. docker run with benchmark and collect data
 for mode in "${benchmark_list[@]}"; do
     for precision in "${precision_list[@]}"; do
-        input_model="${precision}_model"
+        input_model=$(eval echo '$'{${precision}_model})
         docker exec "${CONTAINER_NAME}" bash -c "\
-                    cd ${model_src_dir} \
+                    cd ${model_src_dir} && \
                     bash run_benchmark.sh --input_model=/workspace/${input_model} \
                                           --mode=${mode} \
                                           --dataset_location=/dataset_location \
-                                          --batch_size=${batch_size} > /workspace/${mode}_${precision}.log"
+                                          --batch_size=${batch_size} 2>&1 | tee /workspace/${mode}_${precision}.log"
     done
 done
 
@@ -81,11 +83,12 @@ done
 for mode in "${benchmark_list[@]}"; do
     for precision in "${precision_list[@]}"; do
         if [ "$mode" == "accuracy" ]; then
-            result=$(grep 'Accuracy is' "${WORKSPACE}/${mode}_${precision}.log" | awk '{print $NF}')
+            result=$(grep 'Accuracy: ' "${WORKSPACE}/${mode}_${precision}.log" | awk '{print $NF}')
         else
-            result=$(grep 'Throughput sum:' "${WORKSPACE}/${mode}_${precision}.log" | awk '{print $(NF-1)}')
+            result=$(grep 'Throughput sum: ' "${WORKSPACE}/${mode}_${precision}.log" | awk '{print $(NF-1)}')
         fi
-        echo "${model_name},${mode},${precision},${batch_size},${result}" >> "${WORKSPACE}"/summary.log
+        echo "${mode},${precision},${batch_size},${result}"
+        echo "${mode},${precision},${batch_size},${result}" >> "${WORKSPACE}"/summary.log
     done
 done
 
