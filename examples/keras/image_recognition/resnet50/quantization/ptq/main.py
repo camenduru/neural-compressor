@@ -108,6 +108,7 @@ def evaluate(model):
     return acc
 
 def main(_):
+    os.environ['_ITEX_OPTIMIZE_AGGRESSIVE'] = '1'
     from neural_compressor.utils import set_random_seed
     set_random_seed(9527)
     if FLAGS.tune:

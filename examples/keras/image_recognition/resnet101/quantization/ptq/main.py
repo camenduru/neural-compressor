@@ -120,6 +120,7 @@ def evaluate(model):
     return acc
 
 def main(_):
+    os.environ['_ITEX_OPTIMIZE_AGGRESSIVE'] = '1'
     if FLAGS.tune:
         from neural_compressor.quantization import fit
         from neural_compressor.config import PostTrainingQuantConfig
