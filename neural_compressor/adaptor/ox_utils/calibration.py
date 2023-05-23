@@ -508,12 +508,14 @@ class ONNXRTAugment:
                 if rmin < 0:
                     rmin = 0
             elif next_node.op_type == 'Clip' and len(next_node.input) == 3:
-                clip_min = numpy_helper.to_array(self.model_wrapper.get_initializer(next_node.input[1]))
-                clip_max = numpy_helper.to_array(self.model_wrapper.get_initializer(next_node.input[2]))
-                if rmin < clip_min:
-                    rmin = clip_min.tolist() if not isinstance(clip_min.tolist(), list)  else clip_min.tolist()[0]
-                if rmax > clip_max:
-                    rmax = clip_max.tolist() if not isinstance(clip_max.tolist(), list)  else clip_max.tolist()[0]
+                if self.model_wrapper.get_initializer(next_node.input[1]) is not None:
+                    clip_min = numpy_helper.to_array(self.model_wrapper.get_initializer(next_node.input[1]))
+                    if rmin < clip_min:
+                        rmin = clip_min.tolist() if not isinstance(clip_min.tolist(), list)  else clip_min.tolist()[0]
+                if self.model_wrapper.get_initializer(next_node.input[2]) is not None:
+                    clip_max = numpy_helper.to_array(self.model_wrapper.get_initializer(next_node.input[2]))
+                    if rmax > clip_max:
+                        rmax = clip_max.tolist() if not isinstance(clip_max.tolist(), list)  else clip_max.tolist()[0]
 
         if last_node:
             if last_node.op_type in ['Conv', 'FusedConv']:
@@ -624,7 +626,7 @@ class ONNXRTAugment:
         max_per_channels = max_per_channels.astype(np.single)
         return max_per_channels
 
-    def calib_smooth(self, percentile, op_types):
+    def calib_smooth(self, percentile, op_types, q_config):
         """Smooth model calibration.
 
         Mainly get the max info per channel of input tensors.
@@ -641,6 +643,13 @@ class ONNXRTAugment:
         tensors_to_dump = self._get_input_tensor_of_ops(op_types)
         self.model_wrapper.add_tensors_to_outputs(tensors_to_dump)
         self.augmented_model = self.model_wrapper.model
+        if self.model_wrapper.is_large_model:  # pragma: no cover
+            onnx.save_model(self.augmented_model,
+                            self.model_wrapper.model_path + '_augment.onnx',
+                            save_as_external_data=True,
+                            all_tensors_to_one_file=True,
+                            convert_attribute=False)
+            
         _, output_dicts = self.get_intermediate_outputs()
 
         # remove the input tensors of {op_types} to outputs of the model

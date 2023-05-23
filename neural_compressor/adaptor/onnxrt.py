@@ -152,8 +152,8 @@ class ONNXRUNTIMEAdaptor(Adaptor):
 
         self.optype_statistics = None
 
-    def smooth_quant(self, model, dataloader, iterations, tune_cfg, alpha=0.5, folding=False,
-                                    percentile=99.999, op_types=['MatMul', 'Linear', 'Conv'], scales_per_op=True):
+    def smooth_quant(self, model, dataloader, iterations, tune_cfg, alpha=0.5, percentile=99.999,
+            op_types=['FusedConv', 'MatMul', 'Linear', 'Conv'], scales_per_op=True, **kwargs):
         """Get augmented model with smooth quant.
 
         Args:
@@ -162,7 +162,6 @@ class ONNXRUNTIMEAdaptor(Adaptor):
             iterations: iterations
             tune_cfg: quantization config
             alpha: smooth alpha in SmoothQuant, 1.0 will fallback to SPIQ
-            folding: whether insert mul(False) or just allow foldable layers(True) for SmoothQuant
             percentile:Percentile of calibration to remove outliers
             op_types: The op types whose input tensor will be dumped
             scales_per_op: True, each op will have an individual scale, mainly for accuracy
@@ -174,12 +173,14 @@ class ONNXRUNTIMEAdaptor(Adaptor):
         if self.smooth_quant_model is not None:
             return self.smooth_quant_model
         from neural_compressor.adaptor.ox_utils.calibration import ONNXRTAugment
+        from neural_compressor.adaptor.ox_utils.util import fold_scale
         from onnx import numpy_helper
         if isinstance(alpha, str):
             logger.warning(f"onnx backend only support float alpha, reset alpha to 0.5 ")
             alpha = 0.5
         black_nodes = []
         white_nodes = []
+        quantize_config = None
         if tune_cfg is not None:
             quantize_config = self._cfg_to_quantize_config(tune_cfg)
             black_nodes = [node for node in quantize_config if quantize_config[node] == 'fp32']
@@ -191,21 +192,24 @@ class ONNXRUNTIMEAdaptor(Adaptor):
                                 iterations=list(range(0, iterations)),
                                 backend=self.backend, reduce_range=self.reduce_range)
 
-        max_vals_per_channel, shape_infos = augment.calib_smooth(percentile, op_types)
+        max_vals_per_channel, shape_infos = augment.calib_smooth(percentile, op_types, quantize_config)
 
         input_tensors_2_weights = {}
         input_tensors_2_weights_nodes = {}
         for name in max_vals_per_channel.keys():
             curr_tensor_to_weight = []
             curr_tensor_to_weight_nodes = []
-            nodes = self.pre_optimized_model.input_name_to_nodes[name]
+            nodes = [i for i in self.pre_optimized_model.nodes() if name in i.input]
             for node in nodes:
                 if node.op_type not in op_types:
                     continue
                 if len(node.input) >= 2:
                     input = node.input[1]  ##TODO always dump the index 1 to get the weight
                     if self.pre_optimized_model.get_initializer(input):
-                        weight = numpy_helper.to_array(self.pre_optimized_model.get_initializer(input))
+                        weight = numpy_helper.to_array(self.pre_optimized_model.get_initializer(input),
+                                os.path.dirname(self.pre_optimized_model.model_path)) if \
+                                self.pre_optimized_model.model_path is not None else \
+                                numpy_helper.to_array(self.pre_optimized_model.get_initializer(input))
                         curr_tensor_to_weight.append(weight)
                         curr_tensor_to_weight_nodes.append(node)
             input_tensors_2_weights[name] = curr_tensor_to_weight
@@ -232,6 +236,7 @@ class ONNXRUNTIMEAdaptor(Adaptor):
         self.pre_optimized_model.update()
         self.pre_optimized_model.topological_sort()
         self.pre_optimized_model.remove_unused_constant()
+        fold_scale(self.pre_optimized_model, scales)
         self.smooth_quant_model = self.pre_optimized_model
         return self.smooth_quant_model
 
