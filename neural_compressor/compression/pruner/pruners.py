@@ -27,6 +27,7 @@ from .utils import logger
 
 PRUNERS = {}
 
+
 def register_pruner(name):
     """Class decorator to register a Pruner subclass to the registry.
 
@@ -46,6 +47,7 @@ def register_pruner(name):
         return pruner
 
     return register
+
 
 def parse_valid_pruner_types():
     """Get all valid pruner names."""
@@ -87,7 +89,8 @@ def get_pruner(config, modules):
                 name = "basic"  ##return the basic pruner
         else:
             config['criterion_type'] = name
-            name = "progressive"  ## return the progressive pruner
+            # name = "progressive"  ## return the progressive pruner
+            name = "progressive"
 
     if name not in PRUNERS.keys():
         assert False, f"does not support {name}, currently only support {parse_valid_pruner_types()}"
@@ -130,11 +133,11 @@ class BasePruner:
         self.start_step = self.config['start_step']
         self.end_step = self.config['end_step']
         self.pruning_frequency = self.config['pruning_frequency']
-        ##this is different with original code
+        # this is different with original code
         self.total_prune_cnt = (self.end_step - self.start_step + self.pruning_frequency) \
                                // self.pruning_frequency
         self.completed_pruned_cnt = 0
-        self.total_prune_cnt -= 1  ## not pruning at step 0
+        self.total_prune_cnt -= 1  # not pruning at step 0
         if self.total_prune_cnt == 0:
             self.total_prune_cnt = 1
             self.completed_pruned_cnt = 1
@@ -249,13 +252,13 @@ class BasePruner:
             mask = self.block_mask.repeat_interleave(block_size[0], dim=0).repeat_interleave(\
                                                         block_size[1], dim=-1).to(self.weight.device)
             return F.linear(input, self.weight*mask, self.bias)
-        
+
         for key in self.modules.keys():
                 if not hasattr(self.modules[key], 'block_mask'):
                     continue # No corresponding block mask, skip.
                 module = self.modules[key]
                 module.forward = partial(forward, module)
-                
+
     def recover_forward(self):
         """Restore the forward format at the end of pruning"""
         with torch.no_grad():
@@ -264,7 +267,7 @@ class BasePruner:
                     continue # No corresponding block mask, skip.
                 module = self.modules[key]
                 module.forward = partial(torch.nn.Linear.forward, module)
-                
+
 
 @register_pruner("basic")
 class BasicPruner(BasePruner):
@@ -353,7 +356,7 @@ class BasicPruner(BasePruner):
 
     def on_after_optimizer_step(self):
         """Prune the model after optimization."""
-        ##the order of the following three lines can't not be exchanged
+        # the order of the following three lines can't not be exchanged
         if self.global_step >= self.start_step and self.global_step <= self.end_step:
             self.reg.on_after_optimizer_step()
         self.mask_weights()
@@ -420,26 +423,26 @@ class BlockMaskPruner(BasePruner):
     def __init__(self, config, modules):
         """Initialize."""
         super(BlockMaskPruner, self).__init__(config, modules)
-        
+
     def _init(self):
         """Initialize."""
         self.pattern = get_pattern(self.config, self.modules)
-        self.masks = self.pattern.get_block_masks(self.modules)
+        self.masks = self.pattern.register_block_masks(self.modules)
         self.rewrite_forward()
         self.scheduler = get_scheduler(self.config)
         self.criterion = get_criterion(self.config, self.modules)
         self.reg = get_reg(self.config, self.modules, self.pattern)
-        
+
         if "channel" not in self.pattern.pattern:
             logger.info("Enabling channel-wise pattern would be a better choice.")
-    
+
     # def on_step_begin(self, local_step):
     #     """Implement at the start of each step.
-    
+
     #     Update the masks at a given local_step.
     #     """
     #     self.update_masks(local_step)
-        
+
     def update_masks(self, local_step):
         """Update the masks at a given local step."""
         if self.global_step == self.start_step:
@@ -469,15 +472,13 @@ class BlockMaskPruner(BasePruner):
 
         self.current_sparsity_ratio = self.pattern.get_sparsity_ratio(self.masks)
         logger.info(f"current sparsity ratio is {self.current_sparsity_ratio}")
-        
-        if (self.end_step-self.global_step) / self.pruning_frequency < 1:
-            self.recover_forward()
-        
+
     def on_before_optimizer_step(self):
         """Implement before optimizer.step()."""
-        self.reg.on_before_optimizer_step()
-        self.criterion.on_before_optimizer_step()
-    
+        if self.global_step >= self.start_step and self.global_step <= self.end_step:
+            self.reg.on_before_optimizer_step()
+            self.criterion.on_before_optimizer_step()
+
     def on_after_optimizer_step(self):
         """Prune the model after optimization."""
         ##the order of the following four lines can't not be exchanged
@@ -485,23 +486,27 @@ class BlockMaskPruner(BasePruner):
             self.reg.on_after_optimizer_step()
         self.zero_mask_grad()
         self.mask_weights()
+        if not self.end_step or self.end_step == self.global_step:
+            # recover forward method and remove block mask parameters at last prune step
+            self.recover_forward()
+            self.pattern.remove_block_masks()
         self.global_step += 1
-                
+
     def mask_weights(self):
         """Apply block masks to corresponding modules' weights.
 
         Weights are multipled with masks. This is the formal pruning process.
         """
         with torch.no_grad():
-            self.pattern.mask_block_weights()
-        
+            self.pattern.mask_block_weights(self.masks)
+
     def update_block_masks(self, masks):
         """Update the block mask parameters."""
         with torch.no_grad():
             for key in self.masks.keys():
                 module = self.modules[key]
                 module.block_mask.data = masks[key].data
-                
+
     def zero_mask_grad(self):
         with torch.no_grad():
             for key in self.modules.keys():
@@ -514,8 +519,8 @@ class BlockMaskPruner(BasePruner):
                     else:
                         mask.grad.requires_grad_(False)
                     mask.grad.zero_()
-        
-    
+
+
 @register_pruner('retrain_free')
 class RetrainFreePruner(BasePruner):
     """Pruning Pruner.
@@ -524,7 +529,7 @@ class RetrainFreePruner(BasePruner):
     RetrainFreePruner supports one-shot pruning (same effect as fast retraining free) and iterative pruning.
     Please refer to A Fast Post-Training Pruning Framework for Transformers
         (https://arxiv.org/abs/2204.09656)
-        
+
     1. Defines pruning functions called at step begin/end, before/after optimize and epoch begin/end.
     2. Defines the pruning criterion and fixed weight parameters.
     3. Obtain block masks and its grads.
@@ -543,27 +548,27 @@ class RetrainFreePruner(BasePruner):
     def __init__(self, config, modules):
         """Initialize."""
         super(RetrainFreePruner, self).__init__(config, modules)
-        
+
     def _init(self):
         """Initialize."""
         self.pattern = get_pattern(self.config, self.modules)
-        self.masks = self.pattern.get_block_masks(self.modules)
+        self.masks = self.pattern.register_block_masks(self.modules)
         self.rewrite_forward()
         self.scheduler = get_scheduler(self.config)
         self.criterion = get_criterion(self.config, self.modules)
         self.reg = get_reg(self.config, self.modules, self.pattern)
-        
+
         logger.warning("Retrain-free pruner fixed the weights, please DO NOT turn on gradient update.")
         assert "channel" in self.pattern.pattern, \
                 "retrain-free pruner only supports large patterns like channel-wise pruning."
-        
+
     # def on_step_begin(self, local_step):
     #     """Implement at the start of each step.
-    
+
     #     Update the masks at a given local_step.
     #     """
     #     self.update_masks(local_step)
-        
+
     def update_masks(self, local_step):
         """Update the masks at a given local step."""
         if self.global_step == self.start_step:
@@ -587,47 +592,50 @@ class RetrainFreePruner(BasePruner):
         self.completed_pruned_cnt += 1
         if self.criterion.scores == {}:
             return
+        # the order of the following three lines can't not be exchanged
         self.masks = self.pattern.get_masks(self.criterion.scores, current_target_sparsity_ratio, self.masks)
         self.rearrange_masks(self.masks)
         self.update_block_masks(self.masks)
-        # support iterative rearrangement
-        if (self.end_step-self.global_step) / self.pruning_frequency < 1:
-            self.mask_weights()
-            logger.info(f"mask weights at end_step: {self.global_step}")
-            self.recover_forward()
 
         self.current_sparsity_ratio = self.pattern.get_sparsity_ratio(self.masks)
         logger.info(f"current sparsity ratio is {self.current_sparsity_ratio}")
-        
+
     def on_before_optimizer_step(self):
         """Implement before optimizer.step()."""
-        self.reg.on_before_optimizer_step()
-        self.criterion.on_before_optimizer_step()
-    
+        if self.global_step >= self.start_step and self.global_step <= self.end_step:
+            self.reg.on_before_optimizer_step()
+            self.criterion.on_before_optimizer_step()
+
     def on_after_optimizer_step(self):
         """Prune the model after optimization."""
         ##the order of the following four lines can't not be exchanged
         if self.global_step >= self.start_step and self.global_step <= self.end_step:
             self.reg.on_after_optimizer_step()
-        self.zero_mask_grad()
-        # self.mask_weights() #done on update_masks
+        # self.mask_weights() 
+        # Iterative rearrangement with mask weight at the last step only
+        if self.end_step == self.global_step:
+            self.mask_weights()
+            logger.info(f"mask weights at last_prune_step: {self.global_step}")
+            # recover forward method and remove block mask parameters at last prune step
+            self.recover_forward()
+            self.pattern.remove_block_masks()
         self.global_step += 1
-                
+
     def mask_weights(self):
         """Apply block masks to corresponding modules' weights.
 
         Weights are multipled with masks. This is the formal pruning process.
         """
         with torch.no_grad():
-            self.pattern.mask_block_weights()
-        
+            self.pattern.mask_block_weights(self.masks)
+
     def update_block_masks(self, masks):
         """Update the block mask parameters."""
         with torch.no_grad():
             for key in self.masks.keys():
                 module = self.modules[key]
                 module.block_mask.data = masks[key].data
-            
+
     def rearrange_masks(self, masks):
         """Rearrange the masks of each layer with constant sparsity."""
         with torch.no_grad():
@@ -635,10 +643,10 @@ class RetrainFreePruner(BasePruner):
             for key in masks.keys():
                 block_mask = masks[key]
                 num_pruned = torch.sum(block_mask == 0.0).data.item()
-                grads = torch.stack(self.criterion.collected_grads[key], dim=0).squeeze()
-                if not num_pruned:
+                if not num_pruned or not self.criterion.collected_grads[key]:
                     new_masks[key] = block_mask
                     continue
+                grads = torch.stack(self.criterion.collected_grads[key], dim=0).squeeze()
                 grads = grads.permute(1, 0).contiguous()
                 grads_sq = grads.pow(2).sum(dim=1)
                 _, indicies = grads_sq.sort(descending=False)
@@ -657,7 +665,7 @@ class RetrainFreePruner(BasePruner):
                 new_masks[key][masked_indicies] = 0
                 new_masks[key] = new_masks[key] * torch.ones_like(block_mask).to(block_mask.device)
             self.masks = new_masks
-            
+
     def zero_mask_grad(self):
         with torch.no_grad():
             for key in self.modules.keys():
@@ -670,7 +678,6 @@ class RetrainFreePruner(BasePruner):
                     else:
                         mask.grad.requires_grad_(False)
                     mask.grad.zero_()
-    
 
 @register_pruner('progressive')
 class ProgressivePruner(BasicPruner):
@@ -717,9 +724,9 @@ class ProgressivePruner(BasicPruner):
         """Auxiliary function for initializing progressive pruning."""
         # detailed progressive parameters will stored at patterns.py
         # step 1: check if pattern is NxM
-        if "x" not in self.pattern.pattern:
-            raise NotImplementedError(f"Currently progressive only " \
-                                      f"support NxM and per-channel pruning patterns.")
+        # if "x" not in self.pattern.pattern:
+        #     raise NotImplementedError(f"Currently progressive only " \
+        #                               f"support NxM and per-channel pruning patterns.")
 
         # step 2: check if current set up will "degrade" into non-progressive
         degrading_flag = False
@@ -751,6 +758,8 @@ class ProgressivePruner(BasicPruner):
         """Check if the settings of progressive pruning are valid."""
         # check some problematic settings
         if self.progressive_type == "linear":
+            # linear based progressive pruning, only valid for NxM pattern
+            assert type(self.pattern).__name__ == "PatternNxM", "Progressive linear pruning only support NxM."
             if self.use_global:
                 # when global progressive is applied, linear type is contradict.
                 raise NotImplementedError("Global progressive pruning do not support linear pattern")
@@ -763,13 +772,23 @@ class ProgressivePruner(BasicPruner):
                         f"In layer {key}, its pruning pattern is {block_size}, " \
                         f"while progressive steps {self.progressive_steps} is indivisible.")
         else:
-            for key in self.pattern.block_size.keys():
-                block_size = self.pattern.block_size[key]
-                total_block_size = block_size[0] * block_size[1]
-                if total_block_size < self.progressive_steps:
+            # score based progressive pruning, support both NxM and N:M patterns
+            if type(self.pattern).__name__ == "PatternNxM":
+                for key in self.pattern.block_size.keys():
+                    block_size = self.pattern.block_size[key]
+                    total_block_size = block_size[0] * block_size[1]
+                    if total_block_size < self.progressive_steps:
+                        raise ValueError(
+                            f"In layer {key}, its pruning pattern is {block_size}, " \
+                            f"while progressive steps {self.progressive_steps} is overflowing.")
+            elif type(self.pattern).__name__ == "PatternNInM":
+                if self.pattern.N < self.progressive_steps:
                     raise ValueError(
-                        f"In layer {key}, its pruning pattern is {block_size}, " \
-                        f"while progressive steps {self.progressive_steps} is overflowing.")
+                            f"Pruning pattern is {self.pattern.N} in {self.pattern.M}, " \
+                            f"while progressive steps {self.progressive_steps} is overflowing.")
+            else:
+                raise NotImplementedError
+
 
     def check_is_pruned_progressive_step(self, step):
         """Check if a progressive pruning process should be performed at the current step.
@@ -882,5 +901,3 @@ class ProgressivePruner(BasicPruner):
         """Output the progressive sparsity."""
         cur_sp = self.pattern.get_sparsity_ratio_progressive(self.progressive_masks)
         logger.info("Step: {} -> Current progressive sparsity: {}".format(self.global_step, cur_sp))
-
-
