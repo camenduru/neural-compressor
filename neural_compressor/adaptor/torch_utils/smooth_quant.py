@@ -991,6 +991,7 @@ class TorchSmoothQuant:
         :return: A FP32 model with the same architecture as the orig model but with different weight which will be
         benefit to quantization
         """
+        logger.info("lyt_debug sq_INC lyt/os2 0817")
         if not isinstance(self.model, torch.nn.Module):
             logger.warning("smooth quant is ignored since the model is not a torch module")
             return self.model
@@ -1053,6 +1054,7 @@ class TorchSmoothQuant:
                         del self.absorb_to_layer[d]
 
                 if alpha == 'auto':
+                    logger.info(f"lyt_debug auto_alpha_args: {auto_alpha_args}")
                     self.alpha_per_layer = self._auto_tune_alpha_new(input_maxes_abs, auto_calib_iter=32,
                                                                      **auto_alpha_args)  ##save the alpha
 
