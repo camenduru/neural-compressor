@@ -233,6 +233,7 @@ class WrapperLayer(torch.nn.Module):
         self.weight_scale = None
         self.input_scale = None
         self.save_q_input = save_q_input
+        self.os_bias = None #lyt_os
 
     def enable_quant(self):
         self.quant = True
@@ -244,11 +245,22 @@ class WrapperLayer(torch.nn.Module):
         self.input_scale = input_scale
         self.weight_scale = weight_scale
 
+    def update_os_bias(self, bias): #lyt_os
+        self.os_bias = bias
+
     ##TODO better tradeoff performance and memory, currently it's too slow
     def q_dq_forward(self, x, input_scale, weight_scale):
         layer_copy = copy.deepcopy(self.orig_layer)
+        w0 = copy.deepcopy(layer_copy.weight)  #lyt_os
         if weight_scale != None:
             layer_copy.weight *= weight_scale
+            if self.os_bias != None: #lyt_os
+                if hasattr(layer_copy, 'bias') and (layer_copy.bias != None):
+                    bias0 = copy.deepcopy(layer_copy.bias.data)
+                    res = torch.matmul(self.os_bias, w0.transpose(0, 1)) + layer_copy.bias.data
+                    layer_copy.bias.data.copy_(res)
+                x = x - self.os_bias
+                w0 = []
         q_dq_weight = quant_dequant_w(layer_copy)
         layer_copy.weight.data.copy_(q_dq_weight)
         if input_scale == None:
@@ -787,6 +799,17 @@ class TorchSmoothQuant:
                 weight_scale = self._reshape_scale_for_weight(layer, weight_scale)
                 layer.update_scale(input_scale, weight_scale)  ##FIXME
 
+
+    def outlier_suppression_plus_shift(self, module): #lyt_os
+        x = copy.deepcopy(module.q_input) #lyt_os_debug
+        if len(module.orig_layer.weight.shape) == 4: 
+            x = x.permute(0, 2, 3, 1)
+        x = x.reshape(-1, x.shape[-1])
+        x_min, x_max = torch.min(x, dim=0).values, torch.max(x, dim=0).values
+        z = (x_min + x_max) / 2
+        return z
+
+
     def _get_one_sample_auto_loss(self, input, alpha_space, orig_best_alpha, input_maxes):
         self._change_qdq_for_auto(enable=False)
 
@@ -805,6 +828,10 @@ class TorchSmoothQuant:
         loss_alphas = {}
         for name in module_names:
             module = get_module(self.model, name)
+
+            os_bias = self.outlier_suppression_plus_shift(module) #lyt_os
+            module.update_os_bias(os_bias) #lyt_os
+
             loss = self._get_auto_loss(fp32_output[name], module.output)
             cur_alpha = orig_best_alpha
             if isinstance(orig_best_alpha, dict):
