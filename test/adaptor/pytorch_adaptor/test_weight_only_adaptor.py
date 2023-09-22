@@ -2,12 +2,21 @@ import copy
 import os
 import shutil
 import unittest
+from packaging.version import Version
 
 import torch
 import transformers
 
 from neural_compressor import PostTrainingQuantConfig, quantization
 from neural_compressor.adaptor.torch_utils.model_wrapper import MulLinear, WeightOnlyLinear
+
+try:
+    import intel_extension_for_pytorch as ipex
+
+    TEST_IPEX = True
+    IPEX_VERSION = Version(ipex.__version__)
+except:
+    TEST_IPEX = False
 
 
 class Model(torch.nn.Module):
@@ -72,6 +81,25 @@ class TestPytorchWeightOnlyAdaptor(unittest.TestCase):
     def tearDownClass(self):
         shutil.rmtree("./saved", ignore_errors=True)
         shutil.rmtree("runs", ignore_errors=True)
+
+    @unittest.skipIf(
+        not TEST_IPEX or IPEX_VERSION < Version("2.1.0").release,
+        "Please use Intel extension for Pytorch version 1.10 or 1.11",
+    )
+    def test_RTN_int_quant_ipex(self):
+        input = torch.randn(3, 30)
+        model = Model()
+        out1 = model(input)
+        conf = PostTrainingQuantConfig(
+            approach="weight_only",
+        )
+        q_model = quantization.fit(model, conf)
+        out2 = q_model(input)
+        self.assertTrue(torch.all(torch.isclose(out1, out2, atol=5e-1)))
+        self.assertFalse(torch.all(out1 == out2))
+        compressed_model = q_model.export_compressed_model()
+        out3 = compressed_model(input)
+        self.assertTrue(torch.all(out3 == out2))
 
     def test_RTN_int_quant(self):
         input = torch.randn(3, 30)

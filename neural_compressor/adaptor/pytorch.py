@@ -812,6 +812,7 @@ class TemplateAdaptor(Adaptor):
         torch.manual_seed(random_seed)
 
         self.bf16_ops = []
+        self.backend = framework_specific_info.get("backend", None)
         self.use_bf16 = framework_specific_info.get("use_bf16", True)
         self.device = framework_specific_info["device"]
         self.q_dataloader = framework_specific_info["q_dataloader"]
@@ -4513,10 +4514,41 @@ class PyTorchWeightOnlyAdaptor(TemplateAdaptor):
         if "RTN" in all_algo:
             q_model._model = self.rtn_quantize(q_model._model, tune_cfg)
 
+        if self.backend == 'ipex':
+            # replace torch.nn.Linera with IpexWoqLinear
+            q_model._model = self.ipex_quantize(q_model._model, self.tune_cfg)
+
         q_model.q_config = copy.deepcopy(self.tune_cfg)
         q_model.is_quantized = True
         self._dump_model_op_stats(q_model._model, q_model.q_config)
         return q_model
+
+    def ipex_quantize(self, model, tune_cfg):
+        from intel_extension_for_pytorch.nn.modules import IpexWoqLinear
+        lowp_mode = ipex.quantization.WoqLowpMode.NONE # FP16/BF16/INT8
+        weight_dtype = torch.qint8
+        qconfig = ipex.quantization.get_weight_only_quant_qconfig_mapping( 
+            weight_dtype=weight_dtype,
+            lowp_mode=lowp_mode,
+        )
+        from .torch_utils.util import fetch_module, set_module
+        from .torch_utils.weight_only import rtn_quantize
+
+        for key, config in tune_cfg["op"].items():
+            op_name, op_type = key
+            if config["weight"]["dtype"] == "fp32":
+                continue
+            else:
+                bits = config["weight"]["bits"]
+                group_size = config["weight"]["group_size"]
+                algorithm = config["weight"]["algorithm"]
+                assert bits == 8 and group_size == -1, "Only support W8G-1 on IPEX backend"
+                assert algorithm != "GPTQ", "GPTQ is not supported for W8G-1 on IPEX backend"
+                m = fetch_module(model, op_name)
+                m.qconfig = qconfig.global_qconfig
+                m = IpexWoqLinear.from_float(m)
+                set_module(model, op_name, m)
+        return model
 
     def rtn_quantize(self, model, tune_cfg):
         logger.info("quantizing with the round-to-nearest algorithm")
