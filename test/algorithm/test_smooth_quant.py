@@ -1268,6 +1268,7 @@ class TestTextGeneration(unittest.TestCase):
 class TestExamples(unittest.TestCase):
     def test_peft_model(self):
         import peft
+
         model_id = "peft-internal-testing/tiny_T5ForSeq2SeqLM-lora"
         model = peft.AutoPeftModelForSeq2SeqLM.from_pretrained(model_id)
         example_input = torch.ones(1, 128, dtype=torch.long)
@@ -1277,7 +1278,7 @@ class TestExamples(unittest.TestCase):
             model(example_input)
 
         sq = TorchSmoothQuant(model, example_inputs=example_input, q_func=calib_func)
-        sq.transform(alpha='auto', folding=False)
+        sq.transform(alpha="auto", folding=False)
 
 
 if __name__ == "__main__":
