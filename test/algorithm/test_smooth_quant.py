@@ -1279,18 +1279,16 @@ class TestPeftModel(unittest.TestCase):
 
         sq = TorchSmoothQuant(model, example_inputs=example_input, q_func=calib_func)
         sq.transform(alpha=0.5, folding=False)
-        self.assertTrue(isinstance(
-            model.base_model.model.model.decoder.layers[0].self_attn.v_proj, 
-            SQLinearWrapper
-        ))
-        self.assertTrue(isinstance(
-            model.base_model.model.model.decoder.layers[0].self_attn.v_proj.sq_linear.lora_A.default, 
-            SQLinearWrapper
-        ))  # Linear in Linear
-        self.assertTrue(isinstance(
-            model.base_model.model.model.score.original_module, 
-            torch.nn.Linear
-        ))  # Linear that is not called in calibration
+        self.assertTrue(isinstance(model.base_model.model.model.decoder.layers[0].self_attn.v_proj, SQLinearWrapper))
+        self.assertTrue(
+            isinstance(
+                model.base_model.model.model.decoder.layers[0].self_attn.v_proj.sq_linear.lora_A.default,
+                SQLinearWrapper,
+            )
+        )  # Linear in Linear
+        self.assertTrue(
+            isinstance(model.base_model.model.model.score.original_module, torch.nn.Linear)
+        )  # Linear that is not called in calibration
 
     def test_peft_model_auto_alpha(self):
         import peft
@@ -1306,18 +1304,16 @@ class TestPeftModel(unittest.TestCase):
         # folding=False
         sq = TorchSmoothQuant(model, example_inputs=example_input, q_func=calib_func)
         sq.transform(alpha="auto", folding=False)
-        self.assertTrue(isinstance(
-            model.base_model.model.model.decoder.layers[0].self_attn.v_proj, 
-            SQLinearWrapper
-        ))
-        self.assertTrue(isinstance(
-            model.base_model.model.model.decoder.layers[0].self_attn.v_proj.sq_linear.lora_A.default, 
-            SQLinearWrapper
-        ))  # Linear in Linear
-        self.assertTrue(isinstance(
-            model.base_model.model.score.original_module, 
-            torch.nn.Linear
-        ))  # Linear that is not called in calibration
+        self.assertTrue(isinstance(model.base_model.model.model.decoder.layers[0].self_attn.v_proj, SQLinearWrapper))
+        self.assertTrue(
+            isinstance(
+                model.base_model.model.model.decoder.layers[0].self_attn.v_proj.sq_linear.lora_A.default,
+                SQLinearWrapper,
+            )
+        )  # Linear in Linear
+        self.assertTrue(
+            isinstance(model.base_model.model.score.original_module, torch.nn.Linear)
+        )  # Linear that is not called in calibration
 
         # folding=True
         model = peft.AutoPeftModelForSequenceClassification.from_pretrained(model_id, torchscript=True)
@@ -1329,14 +1325,10 @@ class TestPeftModel(unittest.TestCase):
 
         sq = TorchSmoothQuant(model, example_inputs=example_input, q_func=calib_func)
         sq.transform(alpha="auto", folding=True)
-        self.assertTrue(isinstance(
-            model.base_model.model.model.decoder.layers[0].self_attn.v_proj, 
-            torch.nn.Linear
-        ))
-        self.assertTrue(isinstance(
-            model.base_model.model.model.decoder.layers[0].self_attn.v_proj.lora_A.default, 
-            torch.nn.Linear
-        ))  # Linear in Linear
+        self.assertTrue(isinstance(model.base_model.model.model.decoder.layers[0].self_attn.v_proj, torch.nn.Linear))
+        self.assertTrue(
+            isinstance(model.base_model.model.model.decoder.layers[0].self_attn.v_proj.lora_A.default, torch.nn.Linear)
+        )  # Linear in Linear
 
     def test_peft_model_quantization(self):
         import peft
@@ -1365,22 +1357,24 @@ class TestPeftModel(unittest.TestCase):
             conf,
             calib_func=calib_func,
         )
-        self.assertTrue(isinstance(
-            q_model.model.base_model.model.model.decoder.layers[0].self_attn.v_proj, 
-            SQLinearWrapper
-        ))
-        self.assertTrue(isinstance(
-            q_model.model.base_model.model.model.decoder.layers[0].self_attn.v_proj.sq_linear.lora_A.default, 
-            SQLinearWrapper
-        ))  # Linear in Linear
-        self.assertTrue(isinstance(
-            q_model.model.base_model.model.model.decoder.layers[0].self_attn.v_proj.sq_linear.lora_B.default, 
-            torch.nn.Linear
-        ))  # Linear that failed when smoothquant, because its weights are zeros
-        self.assertTrue(isinstance(
-            q_model.model.base_model.model.score.original_module, 
-            torch.nn.Linear
-        ))  # Linear that is not called in calibration
+        self.assertTrue(
+            isinstance(q_model.model.base_model.model.model.decoder.layers[0].self_attn.v_proj, SQLinearWrapper)
+        )
+        self.assertTrue(
+            isinstance(
+                q_model.model.base_model.model.model.decoder.layers[0].self_attn.v_proj.sq_linear.lora_A.default,
+                SQLinearWrapper,
+            )
+        )  # Linear in Linear
+        self.assertTrue(
+            isinstance(
+                q_model.model.base_model.model.model.decoder.layers[0].self_attn.v_proj.sq_linear.lora_B.default,
+                torch.nn.Linear,
+            )
+        )  # Linear that failed when smoothquant, because its weights are zeros
+        self.assertTrue(
+            isinstance(q_model.model.base_model.model.score.original_module, torch.nn.Linear)
+        )  # Linear that is not called in calibration
 
 
 if __name__ == "__main__":
