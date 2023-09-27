@@ -935,7 +935,7 @@ class TorchSmoothQuant:
         alpha=0.5,
         folding=False,
         percentile=100,
-        op_types=[torch.nn.Linear],
+        op_types=[torch.nn.Linear, torch.nn.Conv2d],
         scales_per_op=False,
         calib_iter=100,
         auto_alpha_args={"alpha_min": 0.0, "alpha_max": 1.0, "alpha_step": 0.1, "shared_criterion": "mean"},
@@ -1085,6 +1085,7 @@ class TorchSmoothQuant:
         self_absorb_layer: A dict, absorb layer name (itself): layers to be smooth quantized
         """
         self_absorb_layer = {}
+        op_types = [torch.nn.Linear]  # TODO： only support SQLinearWrapper
         for name, module in self.model.named_modules():
             if isinstance(module, tuple(op_types)):
                 self_absorb_layer[name] = [name]
