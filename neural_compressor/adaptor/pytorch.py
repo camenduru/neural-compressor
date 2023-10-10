@@ -1881,9 +1881,23 @@ class TemplateAdaptor(Adaptor):
                 input_power = torch.pow(abs_input_max, alpha)
                 weight_power = torch.pow(weight_max, 1 - alpha)
                 scale = torch.clip(input_power / weight_power, min=1e-5)
+                if "os_bias" in info:  # lyt_os_debug_0822
+                    bias_alpha = info["os_bias"]
+                else:
+                    bias_alpha = None
                 for op_name in absorbed_layer:
                     module = fetch_module(q_model, op_name)
-                    new_module = SQLinearWrapper(module, 1.0 / scale, input_minmax, alpha)
+                    new_module = SQLinearWrapper(
+                        module, 1.0 / scale, input_minmax, alpha, bias_alpha=bias_alpha, layer_name=_
+                    )  # lyt_os_debug_0822
+                    if bias_alpha is not None:
+                        logger.info(
+                            f"lyt_debug qdq_quantize bias_wrapper {_}, {bias_alpha.size()}, layer_name: {_}, absorbed_layer: {absorbed_layer}"
+                        )
+                    else:
+                        logger.info(
+                            f"lyt_debug qdq_quantize bias_wrapper {_}, None, layer_name: {_}, absorbed_layer: {absorbed_layer}"
+                        )
                     set_module(q_model, op_name, new_module)
                     logger.debug(f"Current SmoothQuant alpha of {op_name} is {alpha}")
 

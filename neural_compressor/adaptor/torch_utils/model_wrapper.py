@@ -106,11 +106,15 @@ def _wrap_lwq_layer(model, lwq_layers, op_cfgs):
 
 
 class SQLinearWrapper(torch.nn.Module):
-    def __init__(self, module, input_scale, input_minmax, alpha=0.5, dtype=torch.quint8):
+    def __init__(
+        self, module, input_scale, input_minmax, alpha=0.5, dtype=torch.quint8, bias_alpha=None, layer_name=None
+    ):  # lyt_os_debug
         super().__init__()
         self.register_buffer("input_scale", input_scale)
         self.alpha = alpha
         self.dtype = dtype
+        self.bias_alpha = bias_alpha  # lyt_os_debug
+        self.layer_name = layer_name
         # calculate and only save scale, zero_point to avoid memory usage
         self.scale, self.zero_point = self._calculate_qparams(input_scale, input_minmax, dtype)
         self.add_module("sq_linear", module)
@@ -122,6 +126,8 @@ class SQLinearWrapper(torch.nn.Module):
         return self.sq_linear.weight
 
     def forward(self, X):
+        if self.bias_alpha is not None:  # lyt_os_debug_0822
+            X = X - self.bias_alpha
         if self.ipex:
             X = self.sq_linear(X)
         else:
@@ -157,7 +163,24 @@ class SQLinearWrapper(torch.nn.Module):
         # remove mul and reset sq_linear for ipex inference
         scale = self.input_scale.view(1, self.input_scale.shape[0])
         with torch.no_grad():
+            import copy  # lyt_os_debug
+
+            layer_weight = copy.deepcopy(self.sq_linear.weight)  # lyt_os_debug
             self.sq_linear.weight /= scale
+            if self.bias_alpha is not None:  # lyt_os_debug_0822:
+                res = torch.matmul(self.bias_alpha, layer_weight.transpose(0, 1))
+                layer_bias = copy.deepcopy(self.sq_linear.bias)
+                if self.sq_linear.bias is not None:
+                    bias_tmp = self.sq_linear.bias + res
+                    self.sq_linear.bias.data.copy_(bias_tmp)
+                    logger.info(
+                        f"lyt_debug bias shifted AP: {self.layer_name} {self.sq_linear.bias.data.size()}, {torch.all(layer_bias.data == self.sq_linear.bias.data)}"
+                    )
+                else:
+                    self.sq_linear.bias = torch.nn.Parameter(res)
+                    logger.info(
+                        f"lyt_debug bias created AP: {self.layer_name} {self.sq_linear.bias.data.size()}, {layer_bias is None}"
+                    )
 
     def _recover_sq_linear(self):
         # remove mul and reset sq_linear for ipex inference
