@@ -355,9 +355,10 @@ class TorchSmoothQuant:
                 self.input_mins[name] = torch.min(self.input_mins[name], min_tensor)
                 self.input_maxes[name] = torch.max(self.input_maxes[name], max_tensor)
                 self.input_maxes_abs[name] = torch.max(self.input_maxes_abs[name], res)
-            
-            self.bias_shifts[name] = (self.input_mins[name] + self.input_maxes[name]) / 2 # lyt_os_debug_1010 Modified@0913_conflict
 
+            self.bias_shifts[name] = (
+                self.input_mins[name] + self.input_maxes[name]
+            ) / 2  # lyt_os_debug_1010 Modified@0913_conflict
 
         return save_input_hook
 
@@ -549,7 +550,6 @@ class TorchSmoothQuant:
                 layer.weight *= scale
             if hasattr(layer, "bias") and layer.bias is not None:
                 layer.bias *= scale
-
 
     def _cal_scales(self, absorb_to_layer, input_maxes, alpha=0.5, tuning=False, bias_alphas=None):  # lyt_os_debug_0822
         """Cal the adjsut scales
@@ -914,7 +914,9 @@ class TorchSmoothQuant:
                         for layer_name in layer_names:
                             best_alphas_per_module[layer_name] = best_alphas_per_module[key]
 
-                loss_tmp, bias_tmp = self._get_one_batch_auto_loss(input, alpha_space, best_alphas_per_module, input_maxes)  # lyt_os_debug
+                loss_tmp, bias_tmp = self._get_one_batch_auto_loss(
+                    input, alpha_space, best_alphas_per_module, input_maxes
+                )  # lyt_os_debug
                 if loss_alphas == {}:
                     loss_alphas = loss_tmp
                 else:
@@ -929,7 +931,6 @@ class TorchSmoothQuant:
                 #     for key in bias_alphas.keys():
                 #         bias_alphas[key] += bias_tmp[key]
                 #     bias_cnt += 1
-
 
                 total_cnt += self.dataloader.batch_size
                 tmp_cnt += self.dataloader.batch_size
@@ -955,7 +956,9 @@ class TorchSmoothQuant:
                         for layer_name in layer_names:
                             best_alphas_per_module[layer_name] = best_alphas_per_module[key]
 
-                loss_tmp, bias_tmp = self._get_one_batch_auto_loss(input, alpha_space, best_alphas_per_module, input_maxes)  # lyt_os_debug
+                loss_tmp, bias_tmp = self._get_one_batch_auto_loss(
+                    input, alpha_space, best_alphas_per_module, input_maxes
+                )  # lyt_os_debug
                 if loss_alphas == {}:
                     loss_alphas = loss_tmp
                 else:
@@ -970,7 +973,7 @@ class TorchSmoothQuant:
                 #     for key in bias_alphas.keys():
                 #         bias_alphas[key] += bias_tmp[key]
                 #     bias_cnt += 1
-            
+
                 total_cnt += self.dataloader.batch_size
                 tmp_cnt += self.dataloader.batch_size
                 if tmp_cnt // multiply_factor >= 1:
