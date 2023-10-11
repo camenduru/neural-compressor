@@ -1761,6 +1761,7 @@ class TemplateAdaptor(Adaptor):
         scales_per_op=None,
         force_re_smooth=False,
         record_max_info=False,
+        shift_bias=False, #lyt_os_debug_1011
     ):
         """Convert the model by smooth quant.
 
@@ -1804,7 +1805,7 @@ class TemplateAdaptor(Adaptor):
             kwargs["percentile"] = percentile
         if scales_per_op is not None:
             kwargs["scales_per_op"] = scales_per_op
-        model._model = self.sq.transform(alpha=alpha, folding=folding, calib_iter=calib_iter, **kwargs)
+        model._model = self.sq.transform(alpha=alpha, folding=folding, calib_iter=calib_iter, shift_bias=shift_bias, **kwargs) #lyt_os_debug_1011
         if self.sq.record_max_info:
             model.sq_max_info = self.sq.max_value_info
         return model

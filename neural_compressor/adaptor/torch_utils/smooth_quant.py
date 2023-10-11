@@ -325,6 +325,7 @@ class TorchSmoothQuant:
         self.absorb_to_layer = {}
         self.adjust_alpha_space = False
         self.bias_shifts = {}  # lyt_os_debug_0913
+        self.to_shift_bias = False #lyt_os_debug_1011
 
     def _get_device(self):
         """Get the model device
@@ -775,15 +776,17 @@ class TorchSmoothQuant:
         for name in module_names:
             module = get_module(self.model, name)
 
-            os_bias_old = self.outlier_suppression_plus_shift(module)  # lyt_os
-            os_bias = copy.deepcopy(self.bias_shifts[name])  # lyt_os_debug_0913
-            # logger.info(
-            #     f"lyt_debug 0913 os_bias_old {name} {os_bias_old.size()}: {torch.max(os_bias_old)}, {torch.mean(os_bias_old)}, {torch.min(os_bias_old)}"
-            # )
-            # logger.info(
-            #     f"lyt_debug 0913 os_bias_913 {name} {os_bias.size()}: {torch.max(os_bias)}, {torch.mean(os_bias)}, {torch.min(os_bias)}"
-            # )
-            module.update_os_bias(os_bias)  # lyt_os  #lyt_comment out to disable bias-shifting.
+            if self.to_shift_bias:  #lyt_os_debug_1011
+                os_bias_old = self.outlier_suppression_plus_shift(module)  # lyt_os
+                os_bias = copy.deepcopy(self.bias_shifts[name])  # lyt_os_debug_0913
+                # logger.info(
+                #     f"lyt_debug 0913 os_bias_old {name} {os_bias_old.size()}: {torch.max(os_bias_old)}, {torch.mean(os_bias_old)}, {torch.min(os_bias_old)}"
+                # )
+                # logger.info(
+                #     f"lyt_debug 0913 os_bias_913 {name} {os_bias.size()}: {torch.max(os_bias)}, {torch.mean(os_bias)}, {torch.min(os_bias)}"
+                # )
+                module.update_os_bias(os_bias)  # lyt_os  #lyt_comment out to disable bias-shifting.
+                bias_alphas[name] = os_bias  # lyt_os_debug moved_1011
 
             loss = self._get_auto_loss(fp32_output[name], module.output)
             cur_alpha = orig_best_alpha
@@ -791,7 +794,6 @@ class TorchSmoothQuant:
                 cur_alpha = orig_best_alpha[name]
             key_name = str(cur_alpha)
             loss_alphas[name] = {key_name: loss}
-            bias_alphas[name] = os_bias  # lyt_os_debug
         # for name in module_names:
         #     loss_alphas[name]={}
         for alpha in alpha_space:
@@ -887,6 +889,7 @@ class TorchSmoothQuant:
         default_alpha = alpha_space[len(alpha_space) // 2]
         if 0.5 in alpha_space:
             default_alpha = 0.5
+        logger.info(f"lyt_debug default_alpha: {default_alpha}") #lyt_os_debug_1011
         absorb_input_scales, weight_scales = self._cal_scales(
             self.absorb_to_layer, input_maxes, default_alpha, tuning=True
         )
@@ -1014,6 +1017,7 @@ class TorchSmoothQuant:
         scales_per_op=False,
         calib_iter=100,
         auto_alpha_args={"alpha_min": 0.05, "alpha_max": 0.95, "alpha_step": 0.05, "shared_criterion": "mean"},
+        shift_bias=True, #lyt_os_debug_1011
     ):
         """The main entry of smooth quant
         :param alpha: Alpha value to balance the quantization difficulty of activation and weight, please refer
@@ -1034,6 +1038,8 @@ class TorchSmoothQuant:
             self.insert_mul, self.allow_absorb = False, True
         else:
             self.insert_mul, self.allow_absorb = True, False
+        
+        self.to_shift_bias = True if shift_bias is True else False #lyt_os_debug_1011
         if isinstance(alpha, float) and (alpha < 0 or alpha > 1):
             logger.warning("reset alpha to in range [0.0, 1.0]")
             import numpy
@@ -1103,16 +1109,17 @@ class TorchSmoothQuant:
                         del self.absorb_to_layer[d]
                 logger.info(f"lyt_debug auto_alpha_args: {auto_alpha_args}, record_max_info: {self.record_max_info}")
                 if alpha == "auto":
-                    for key in input_maxes_abs.keys():  # lyt_os_debug_0913  #lyt_comment out to disable bias-shifting.
-                        input_maxes_abs[key] -= self.bias_shifts[key]
-                        self.input_mins[key] -= self.bias_shifts[key]  # lyt_os_debug_0915
-                        self.input_maxes[key] -= self.bias_shifts[key]  # lyt_os_debug_0915
-                        logger.info(
-                            f"lyt_debug 0913 input_maxes_abs bias-shifted: {len(input_maxes_abs)}, {len(self.bias_shifts)}"
-                        )
-                        logger.info(
-                            f"lyt_debug 0913 input_maxes input_mins bias-shifted: {len(self.input_maxes)}, {len(self.input_mins)}"
-                        )
+                    if self.to_shift_bias:   #lyt_os_debug_1011
+                        for key in input_maxes_abs.keys():  # lyt_os_debug_0913  #lyt_comment out to disable bias-shifting.
+                            input_maxes_abs[key] -= self.bias_shifts[key]
+                            self.input_mins[key] -= self.bias_shifts[key]  # lyt_os_debug_0915
+                            self.input_maxes[key] -= self.bias_shifts[key]  # lyt_os_debug_0915
+                            logger.info(
+                                f"lyt_debug 0913 input_maxes_abs bias-shifted: {len(input_maxes_abs)}, {len(self.bias_shifts)}"
+                            )
+                            logger.info(
+                                f"lyt_debug 0913 input_maxes input_mins bias-shifted: {len(self.input_maxes)}, {len(self.input_mins)}"
+                            )
                     self.alpha_per_layer, bias_alphas = self._auto_tune_alpha(
                         input_maxes_abs, calib_sample_num=32, **auto_alpha_args
                     )  ##save the alpha #lyt_os_debug_1010 Modified@lyt_os_debug
@@ -1130,7 +1137,8 @@ class TorchSmoothQuant:
             if self.record_max_info:
                 # max_info is recorded in self.max_value_info
                 logger.info(f"lyt_debug absorb_to_layer 1090: {len(self.absorb_to_layer)}, {self.absorb_to_layer}")
-                # bias_alphas = None #lyt_comment to enable bias-shifting.
+                if not self.to_shift_bias:   #lyt_os_debug_1011
+                    bias_alphas = None #lyt_comment to enable bias-shifting.
                 self._adjust_parameters(
                     self.absorb_to_layer, input_maxes_abs, alpha, bias_alphas=bias_alphas
                 )  # lyt_os_debug

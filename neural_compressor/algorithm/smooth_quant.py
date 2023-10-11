@@ -52,6 +52,7 @@ class SmoothQuant(Algorithm):
         self.op_types = None
         self.scales_per_op = None
         self.tune_cfg = None
+        self.shift_bias = None #lyt_os_debug_1011
 
     def __call__(self, origin_model, q_model, adaptor, dataloader, calib_iter):
         """Return the processed model via SmoothQuant algorithm.
@@ -78,6 +79,7 @@ class SmoothQuant(Algorithm):
             kwargs["percentile"] = self.percentile
         if self.scales_per_op is not None:
             kwargs["scales_per_op"] = self.scales_per_op
+        kwargs['shift_bias'] = self.shift_bias #lyt_os_debug_1011
         kwargs["folding"] = self.folding
         kwargs["record_max_info"] = True
         q_model = adaptor.smooth_quant(
