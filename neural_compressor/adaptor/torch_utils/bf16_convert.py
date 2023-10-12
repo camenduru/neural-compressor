@@ -40,6 +40,7 @@ class BF16ModuleWrapper(nn.Module):
         X = X.to(torch.bfloat16)
         self.module.bfloat16()
         X = self.module(X)
+        self.weight = self.module.weight
         return X.float()
 
 
