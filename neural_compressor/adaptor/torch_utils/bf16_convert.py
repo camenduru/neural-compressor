@@ -30,6 +30,9 @@ class BF16ModuleWrapper(nn.Module):
         super(BF16ModuleWrapper, self).__init__()
         self.add_module("module", module)
         self.train(module.training)
+        if isinstance(module, nn.Linear):
+            self.weight = self.module.weight
+            self.bias = self.module.bias
 
     def forward(self, X):
         """Convert dtype."""

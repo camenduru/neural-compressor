@@ -1448,6 +1448,7 @@ class TuneStrategy(metaclass=TuneStrategyMeta):
         if "onnx" in framework.lower():
             if self.mixed_precision_mode:
                 framework_specific_info.update({"approach": "post_training_dynamic_quant"})
+                framework = "pytorch"
             framework_specific_info.update({"deploy_path": os.path.dirname(self.deploy_path)})
             framework_specific_info.update({"workspace_path": options.workspace})
             framework_specific_info.update({"recipes": self.config.recipes})
